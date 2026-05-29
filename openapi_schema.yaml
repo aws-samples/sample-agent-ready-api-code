@@ -1,0 +1,352 @@
+openapi: "3.0.0"
+info:
+  title: Service Desk API (Agent-Ready)
+  version: "1.0.0"
+  description: >
+    A sample agent-ready API for IT service desk operations.
+    Optimized for AI agent consumption with detailed descriptions,
+    unambiguous operationId values, and explicit parameter constraints.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Replace with the auth scheme used by your backend (Bearer/OAuth2/API key/IAM SigV4)"
+  schemas:
+    TicketSummary:
+      type: object
+      properties:
+        ticketId:
+          type: string
+          description: "Unique ticket ID (format: TKT-XXXX) — use with getTicketById for full details"
+        title:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        assignee:
+          type: string
+        createdAt:
+          type: string
+
+    Ticket:
+      type: object
+      properties:
+        ticketId:
+          type: string
+          description: "Unique ticket ID — use this in subsequent operations (addComment, updateTicket, escalateTicket)"
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        assignee:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        comments:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            properties:
+              commentId:
+                type: string
+              text:
+                type: string
+              createdAt:
+                type: string
+
+security:
+  - bearerAuth: []
+
+paths:
+  /tickets:
+    get:
+      operationId: listTickets
+      summary: List support tickets with optional filters
+      description: >
+        Retrieve a paginated list of support tickets. Use this when the user
+        asks to see their tickets, check ticket status, or browse open issues.
+        Supports filtering by status and assignee. Returns up to 20 tickets
+        per page. Do NOT use this to look up a single ticket by ID — use
+        getTicketById instead.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: "Filter by ticket status. Valid values: open, in_progress, resolved, closed. If omitted, returns all statuses."
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, closed]
+        - name: assignee
+          in: query
+          required: false
+          description: "Filter by assignee email address. Returns only tickets assigned to this person."
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: "Page number for pagination (starts at 1). Default is 1."
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: "A paginated list of tickets matching the filter criteria"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tickets:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: "#/components/schemas/TicketSummary"
+                  totalCount:
+                    type: integer
+                    description: "Total number of tickets matching the filter"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+        "400":
+          description: "Invalid request — invalid filter values (e.g., unrecognized status) or malformed query parameters"
+        "404":
+          description: "No tickets found matching the specified filters"
+
+    post:
+      operationId: createTicket
+      summary: Create a new support ticket
+      description: >
+        Create a new support ticket in the system. Use this when the user
+        wants to report an issue, request help, or log a new problem.
+        Requires a title and description at minimum. Returns the created
+        ticket with its unique ID — use this ID for subsequent operations
+        like addComment or updateTicket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title:
+                  type: string
+                  description: "Short summary of the issue (max 200 chars)"
+                description:
+                  type: string
+                  description: "Detailed description of the problem or request"
+                severity:
+                  type: string
+                  enum: [low, medium, high, critical]
+                  description: "Ticket severity. Default is medium if not specified."
+                  default: medium
+                assignee:
+                  type: string
+                  description: "Email of the person to assign. If omitted, goes to unassigned queue."
+      responses:
+        "201":
+          description: "Ticket created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "400":
+          description: "Invalid request — missing required fields or invalid values"
+
+  /tickets/{ticketId}:
+    get:
+      operationId: getTicketById
+      summary: Get full details of a specific ticket
+      description: >
+        Retrieve complete details for a single ticket by its ID. Use this
+        when the user asks about a specific ticket (e.g., "What's the status
+        of TKT-1234?"). Returns all fields including comments and history.
+        The ticketId format is TKT-XXXX.
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          description: "The unique ticket identifier (format: TKT-XXXX)"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Full ticket details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: "Ticket not found — the specified ticketId does not exist"
+
+    patch:
+      operationId: updateTicket
+      summary: Update fields of an existing ticket
+      description: >
+        Update one or more fields of an existing support ticket. Use this
+        when the user wants to change the status, severity, assignee, or
+        description of a ticket. Requires the ticket ID. Only fields
+        included in the request body are updated; omitted fields remain
+        unchanged. Do NOT use this to escalate a ticket — use
+        escalateTicket instead.
+      x-requireConfirmation: ENABLED
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          description: "The unique ticket identifier (format: TKT-XXXX)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [open, in_progress, resolved, closed]
+                severity:
+                  type: string
+                  enum: [low, medium, high, critical]
+                assignee:
+                  type: string
+                  description: "New assignee email address"
+                description:
+                  type: string
+                  description: "Updated description"
+      responses:
+        "200":
+          description: "Ticket updated successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: "Ticket not found"
+
+    delete:
+      operationId: deleteTicket
+      summary: Permanently delete a ticket
+      description: >
+        Permanently delete a support ticket. This action cannot be undone.
+        Use this only when the user explicitly asks to delete a ticket.
+        Requires confirmation before execution. Do NOT use this to close
+        a ticket — use updateTicket with status=closed instead.
+      x-requireConfirmation: ENABLED
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          description: "The unique ticket identifier (format: TKT-XXXX)"
+          schema:
+            type: string
+      responses:
+        "204":
+          description: "Ticket deleted successfully"
+        "404":
+          description: "Ticket not found"
+
+  /tickets/{ticketId}/comments:
+    post:
+      operationId: addComment
+      summary: Add a comment to an existing ticket
+      description: >
+        Add a comment or note to an existing ticket. Use this when the user
+        wants to add information, provide an update, or leave a note on a
+        ticket. Requires the ticketId and comment text. The comment is
+        timestamped automatically.
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          description: "The ticket to add the comment to (format: TKT-XXXX)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  description: "The comment text to add"
+      responses:
+        "201":
+          description: "Comment added successfully"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commentId:
+                    type: string
+                  text:
+                    type: string
+                  createdAt:
+                    type: string
+                    description: "ISO 8601 timestamp"
+        "404":
+          description: "Ticket not found"
+
+  /tickets/{ticketId}/escalate:
+    post:
+      operationId: escalateTicket
+      summary: Escalate a ticket to the next support tier
+      description: >
+        Escalate a ticket to higher-priority support. Use this when the
+        user says a ticket needs escalation, is urgent, or isn't getting
+        resolved. This changes the severity to critical and notifies the
+        escalation team. Do NOT use updateTicket to escalate — this
+        operation handles the full escalation workflow including notifications.
+      x-requireConfirmation: ENABLED
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          description: "The ticket to escalate (format: TKT-XXXX)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  description: "Why this ticket needs escalation"
+      responses:
+        "200":
+          description: "Ticket escalated successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: "Ticket not found"
+
+

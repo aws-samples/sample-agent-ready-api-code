@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeFoundationModel",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "arn:aws:bedrock:REGION::foundation-model/MODEL_ID"
+    },
+    {
+      "Sid": "InvokeActionGroupLambda",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "arn:aws:lambda:REGION:123456789012:function:ServiceDeskHandler"
+    },
+    {
+      "Sid": "ReadOpenAPISchema",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::SCHEMA_BUCKET/openapi_schema.yaml"
+    }
+  ]
+}

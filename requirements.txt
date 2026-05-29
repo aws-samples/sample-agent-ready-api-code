@@ -1,0 +1,5 @@
+strands-agents>=1.0.0
+strands-agents-tools
+httpx>=0.27.0
+pyyaml>=6.0
+boto3>=1.34.120
